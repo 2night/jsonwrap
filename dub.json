@@ -1,0 +1,9 @@
+{
+	"name": "jsonwrap",
+	"description": "Just a simple wrap over dlang std.json",
+	"copyright": "Copyright © 2015-2016, 2night SpA",
+	"authors": ["Andrea Fontana"],
+	"license": "MIT License",
+	"targetType": "library",
+	"dependencies": {}
+}
