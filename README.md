@@ -101,7 +101,7 @@ JSONValue json = parseJSON(`
 
 ```
 
-More:
+More functions:
 
 ```d
 
