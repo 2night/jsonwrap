@@ -37,7 +37,7 @@ struct SafeValue(T)
 // It allows you to read deep values inside json. If possibile it converts value to type T.
 // It returns a SafeValue!T. 
 pure nothrow
-SafeValue!T as(T)(in JSONValue json, in string path, /* lazy */ in T defaultValue = T.init)
+SafeValue!T as(T)(in JSONValue json, in string path = "", /* lazy */ in T defaultValue = T.init)
 {
    // A way to check if to!T is valid
    pure
@@ -64,7 +64,8 @@ SafeValue!T as(T)(in JSONValue json, in string path, /* lazy */ in T defaultValu
 	try
 	{
 		if (json.type() == JSON_TYPE.OBJECT) value = json[splitted.token];
-		else value = json[to!size_t(splitted.token)];
+		else if (json.type() == JSON_TYPE.ARRAY) value = json[to!size_t(splitted.token)];
+      else value = json;
    }
    catch (Exception e) {  return SafeValue!T(false, false, defaultValue); }
 
@@ -150,7 +151,7 @@ SafeValue!T as(T)(in JSONValue json, in string path, /* lazy */ in T defaultValu
 
 // Shortcut. You can write as!null instead of as!(typeof(null))
 pure nothrow
-SafeValue!(typeof(null)) as(typeof(null) T)(in JSONValue json, in string path)
+SafeValue!(typeof(null)) as(typeof(null) T)(in JSONValue json, in string path = "")
 {
    return as!(typeof(null))(json, path);
 }
@@ -174,7 +175,7 @@ unittest
 
 // Works like as!T but it doesn't convert between types. 
 pure nothrow
-SafeValue!T get(T)(in JSONValue json, in string path, in T defaultValue = T.init)
+SafeValue!T get(T)(in JSONValue json, in string path = "", in T defaultValue = T.init)
 {
    alias Ret = SafeValue!T;
 
@@ -186,7 +187,8 @@ SafeValue!T get(T)(in JSONValue json, in string path, in T defaultValue = T.init
 	try
    {
       if (json.type() == JSON_TYPE.OBJECT) value = json[splitted.token];
-      else value = json[to!size_t(splitted.token)];
+      else if (json.type() == JSON_TYPE.ARRAY) value = json[to!size_t(splitted.token)];
+      else value = json;
    }
    catch (Exception e)
    {
@@ -241,7 +243,7 @@ SafeValue!T get(T)(in JSONValue json, in string path, in T defaultValue = T.init
 
 // Shortcut. You can write get!null instead of get!(typeof(null))
 pure nothrow
-SafeValue!(typeof(null)) get(typeof(null) T)(in JSONValue json, in string path)
+SafeValue!(typeof(null)) get(typeof(null) T)(in JSONValue json, in string path = "")
 {
    return get!(typeof(null))(json, path);
 }
@@ -281,7 +283,7 @@ unittest
 
 // Works like get but return T instead of SafeValue!T and throw an exception if something goes wrong (can't convert value or can't find key)
 pure
-T read(T)(in JSONValue json, in string path)
+T read(T)(in JSONValue json, in string path = "")
 {
 	auto ret = get!T(json, path);
    
@@ -677,5 +679,25 @@ unittest
       );
       
       assert(jv.toString == `{"array":[1,2,3],"key":"value","mixed_array":[1,"hello",3],"obj":{"subkey":3}}`);
+   }
+
+   {
+      JSONValue jv = JSOB
+      (
+         "key", "value", 
+         "obj", JSOB("subkey", 3), 
+         "array", [1,2,3], 
+         "mixed_array", JSAB(1, "hello", 3.0f)
+      );
+
+      foreach(size_t idx, o; jv.get!JSONValue("/array"))
+      {
+         assert(o.get!int("/") == idx+1);
+         assert(o.as!float("") == idx+1);
+         assert(o.read!int("/")== idx+1);
+         assert(o.get!int == idx+1);
+         assert(o.as!float == idx+1);
+         assert(o.read!int == idx+1);
+      }
    }
 }
