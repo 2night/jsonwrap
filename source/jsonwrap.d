@@ -1,6 +1,6 @@
 ﻿module jsonwrap;
 
-import std.json : JSONValue, JSON_TYPE;
+import std.json : JSONValue, JSONType;
 import std.string : isNumeric, indexOf;
 import std.typecons : Tuple;
 import std.conv : to;
@@ -63,8 +63,8 @@ SafeValue!T as(T)(in JSONValue json, in string path = "", /* lazy */ in T defaul
    // Split the path passed in tokens and take the first JSONValue
 	try
 	{
-		if (json.type() == JSON_TYPE.OBJECT) value = json[splitted.token];
-		else if (json.type() == JSON_TYPE.ARRAY) value = json[to!size_t(splitted.token)];
+		if (json.type() == JSONType.object) value = json[splitted.token];
+		else if (json.type() == JSONType.array) value = json[to!size_t(splitted.token)];
       else value = json;
    }
    catch (Exception e) {  return SafeValue!T(false, false, defaultValue); }
@@ -72,7 +72,7 @@ SafeValue!T as(T)(in JSONValue json, in string path = "", /* lazy */ in T defaul
 	immutable type	= value.type();
 
 	// The token is a leaf on json, but it's not a leaf on requested path
-	if (!isLast && type != JSON_TYPE.ARRAY && type != JSON_TYPE.OBJECT)
+	if (!isLast && type != JSONType.array && type != JSONType.object)
       return SafeValue!T(false, false, defaultValue);
       
 	SafeValue!T result = SafeValue!T(true, true, defaultValue);
@@ -81,41 +81,41 @@ SafeValue!T as(T)(in JSONValue json, in string path = "", /* lazy */ in T defaul
    {
    	final switch(type)
    	{
-   		case JSON_TYPE.NULL:
+   		case JSONType.null_:
    			result._ok 	= is(T == typeof(null));
    			break;
 
-   		case JSON_TYPE.FALSE:
+   		case JSONType.false_:
    			static if (is(T == bool)) result.value = false;
    			else tryConv!T(false, result);
    			break;
 
-   		case JSON_TYPE.TRUE:
+   		case JSONType.true_:
    			static if (is(T == bool)) result.value = true;
    			else tryConv!T(true, result);
    			break;
 
-   		case JSON_TYPE.FLOAT:
+   		case JSONType.float_:
             static if (is(T == float) || is(T == double)) result.value = to!T(value.floating());
             else tryConv!T(value.floating(), result);
             break;
 
-   		case JSON_TYPE.INTEGER:
+   		case JSONType.integer:
             static if (isIntegral!T) result.value = to!T(value.integer());
             else tryConv!T(value.integer(), result);
    			break;
 
-   		case JSON_TYPE.UINTEGER:
+   		case JSONType.uinteger:
             static if (isIntegral!T) result.value = to!T(value.uinteger());
             else tryConv!T(value.uinteger(), result);
    			break;
 
-   		case JSON_TYPE.STRING:
+   		case JSONType.string:
             static if (isSomeString!T) result.value = to!T(value.str());
             else tryConv!T(value.str(), result);
    			break;
 
-         case JSON_TYPE.OBJECT:
+         case JSONType.object:
    			if (isLast)
    			{
                // We are on the last token of path and we have a object. If user asks for a JSONValue it's ok. 
@@ -127,7 +127,7 @@ SafeValue!T as(T)(in JSONValue json, in string path = "", /* lazy */ in T defaul
    			break;
 
          // Ricorsivo: richiamo per l'elemento indicizzato con il percorso accorciato
-         case JSON_TYPE.ARRAY:
+         case JSONType.array:
    			if (isLast)
    			{
    				// We are on the last token of path and we have an array. If user asks for a JSONValue it's ok. 
@@ -186,8 +186,8 @@ SafeValue!T get(T)(in JSONValue json, in string path = "", in T defaultValue = T
    // Split the path passed in tokens and take the first JSONValue
 	try
    {
-      if (json.type() == JSON_TYPE.OBJECT) value = json[splitted.token];
-      else if (json.type() == JSON_TYPE.ARRAY) value = json[to!size_t(splitted.token)];
+      if (json.type() == JSONType.object) value = json[splitted.token];
+      else if (json.type() == JSONType.array) value = json[to!size_t(splitted.token)];
       else value = json;
    }
    catch (Exception e)
@@ -198,22 +198,22 @@ SafeValue!T get(T)(in JSONValue json, in string path = "", in T defaultValue = T
    immutable type  = value.type();
 
    // The token is a leaf on json, but it's not a leaf on requested path
-	if (!isLast && type != JSON_TYPE.ARRAY && type != JSON_TYPE.OBJECT)
+	if (!isLast && type != JSONType.array && type != JSONType.object)
       return Ret(false, false, defaultValue);
 
    try
    {
       final switch(type)
       {
-         case JSON_TYPE.NULL:       static if (is(T == typeof(null))) return Ret(true, true, null); else break;
-         case JSON_TYPE.FALSE:      static if (is(T == bool)) return Ret(true, true, false); else break;
-         case JSON_TYPE.TRUE:       static if (is(T == bool)) return Ret(true, true, true); else break;
-         case JSON_TYPE.FLOAT:      static if (is(T == float) || is(T == double)) return Ret(true, true, value.floating()); else break;
-         case JSON_TYPE.INTEGER:    static if (isIntegral!T) return Ret(true, true, to!T(value.integer())); else break;
-         case JSON_TYPE.UINTEGER:   static if (isIntegral!T) return Ret(true, true, to!T(value.uinteger())); else break;
-         case JSON_TYPE.STRING:     static if (isSomeString!T) return Ret(true, true, value.str()); else break;
+         case JSONType.null_:       static if (is(T == typeof(null))) return Ret(true, true, null); else break;
+         case JSONType.false_:      static if (is(T == bool)) return Ret(true, true, false); else break;
+         case JSONType.true_:       static if (is(T == bool)) return Ret(true, true, true); else break;
+         case JSONType.float_:      static if (is(T == float) || is(T == double)) return Ret(true, true, value.floating()); else break;
+         case JSONType.integer:    static if (isIntegral!T) return Ret(true, true, to!T(value.integer())); else break;
+         case JSONType.uinteger:   static if (isIntegral!T) return Ret(true, true, to!T(value.uinteger())); else break;
+         case JSONType.string:     static if (isSomeString!T) return Ret(true, true, value.str()); else break;
 
-         case JSON_TYPE.OBJECT:
+         case JSONType.object:
             if (isLast) {
                // See also: as!T
                static if (is(T == JSONValue))
@@ -222,7 +222,7 @@ SafeValue!T get(T)(in JSONValue json, in string path = "", in T defaultValue = T
             }
             else return get!T(value, splitted.remainder, defaultValue);
 
-         case JSON_TYPE.ARRAY:
+         case JSONType.array:
             if (isLast) {
                // See also: as!T
                static if (is(T == JSONValue))
@@ -321,14 +321,14 @@ ref JSONValue put(T)(ref JSONValue json, in string path, in T value)
       immutable idx = to!size_t(splitted.token);
       
       // Are we reading an existing element from an existing array?
-      if (json.type == JSON_TYPE.ARRAY && json.array.length > idx)
+      if (json.type == JSONType.array && json.array.length > idx)
       {
          if (!isLast) put!T(json.array[idx], splitted.remainder, value);
          else json.array[idx] = value;
       }
       else
       {
-         if (json.type != JSON_TYPE.ARRAY)
+         if (json.type != JSONType.array)
             json = JSONValue[].init;
 
          json.array.length = idx+1;
@@ -343,7 +343,7 @@ ref JSONValue put(T)(ref JSONValue json, in string path, in T value)
       immutable idx = splitted.token;
 
       // Are we reading an existing object?
-      if (json.type == JSON_TYPE.OBJECT)
+      if (json.type == JSONType.object)
       {
          if (!isLast)
          {
@@ -399,7 +399,7 @@ ref JSONValue remove(ref JSONValue json, in string path)
    {
       immutable idx = to!size_t(splitted.token);
 
-      if (json.type == JSON_TYPE.ARRAY && json.array.length > idx)
+      if (json.type == JSONType.array && json.array.length > idx)
       {
          if (isLast) json.array = json.array[0..idx] ~ json.array[idx+1 .. $];
          else  json.array[idx].remove(splitted.remainder);
@@ -410,7 +410,7 @@ ref JSONValue remove(ref JSONValue json, in string path)
    {
       immutable idx = splitted.token;
 
-      if (json.type == JSON_TYPE.OBJECT && idx in json.object)
+      if (json.type == JSONType.object && idx in json.object)
       {
          if (isLast) json.object.remove(idx);
          else json.object[idx].remove(splitted.remainder);
@@ -433,7 +433,7 @@ bool exists(in JSONValue json, in string path)
    {
       immutable idx = to!size_t(splitted.token);
 
-      if (json.type == JSON_TYPE.ARRAY && json.array.length > idx)
+      if (json.type == JSONType.array && json.array.length > idx)
       {
          if (isLast) return true;
          else return json.array[idx].exists(splitted.remainder);
@@ -444,7 +444,7 @@ bool exists(in JSONValue json, in string path)
    {
       immutable idx = splitted.token;
 
-      if (json.type == JSON_TYPE.OBJECT && idx in json.object)
+      if (json.type == JSONType.object && idx in json.object)
       {
          if (isLast) return true;
          else return json.object[idx].exists(splitted.remainder);
