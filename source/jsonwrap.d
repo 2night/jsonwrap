@@ -1,4 +1,57 @@
 ﻿module jsonwrap;
+/++ Some extra functions to make easier to work with json
+---
+import jsonwrap;
+
+void main()
+{
+	import std.exception :assertThrown;
+
+   // This works with CTFE, too.
+	auto j = JSOB(
+		"field1", "value1",
+		"field2", JSOB(
+			"subfield1", "value2",
+			"subfield2", 3,
+			"subfield3", [1,2,3],
+		),
+		"field3", JSAB("mixed", 10, "array", JSOB("obj", 15))
+	);
+
+   // Or
+   // auto j = parseJSON(`{"field1" : "value1", "field2" : "..."}`);
+
+	// Read will throw on error
+	assert(j.read!string("/field2/subfield1") == "value2");
+	assert(j.read!int("/field3/1") == 10);
+	assert(j.read!int("/field3/3/obj") == 15);
+	assertThrown(j.read!string("/field2/subfield2")); // Wrong type
+
+	// Safe return default value on error
+	assert(j.safe!string("/field2/subfield2") == string.init);  // subfield2 is a int, wrong type.
+	assert(j.safe!string("/field2/wrong/path") == string.init);
+	assert(j.safe!string("/field2/wrong/path", "default") == "default");
+
+	// Like safe, but it tries to convert
+	assert(j.as!string("/field2/subfield1"), "value2");
+	assert(j.as!string("/field2/subfield2"), "3");
+
+	// Check if a key exists
+	assert(j.exists("/field2/subfield1") == true);
+	assert(j.exists("/field3/test") == false);
+
+	// Remove a key
+	assert(j.exists("/field2/subfield2") == true);
+	j.remove("/field2/subfield2");
+	assert(j.exists("/field2/subfield2") == false);
+
+  // Add a new value, recreating the whole tree
+  j.put("hello/world/so/deep", "yay!");
+  assert(j.exists("hello/world/so/deep") == true);
+
+}
+---
++/
 
 import std.json : JSONValue, JSONType;
 import std.string : isNumeric, indexOf;
@@ -6,10 +59,15 @@ import std.typecons : Tuple;
 import std.conv : to;
 import std.traits : isIntegral, isSomeString;
 
-alias JSOB = JsonObjectBuilder;
-alias JSAB = JsonArrayBuilder;
+alias JSOB = JsonObjectBuilder;  /// Shorthand
+alias JSAB = JsonArrayBuilder;   /// Shorthand
 
-// A simple struct. It is returned by .get and .as functions
+deprecated(".get() is deprecated. Use .safe() instead")
+{
+   alias get = jsonwrap.safe;
+}
+
+/// A simple struct. It is returned by .safe and .as functions
 struct SafeValue(T)
 {
 	@safe @nogc nothrow
@@ -22,20 +80,19 @@ struct SafeValue(T)
 
    // Return true if key is found.
    @property @safe @nogc nothrow exists() inout { return _exists; }
-   
+
    // Return true if value is read without errors
    @property @safe @nogc nothrow ok() inout { return _ok; }
-   
+
 	private bool _exists   = false;
 	private bool _ok 	     = false;
-   
+
    T value = T.init;
 
    alias value this;
 }
 
-// It allows you to read deep values inside json. If possibile it converts value to type T.
-// It returns a SafeValue!T. 
+/// It allows you to read deep values inside a json. If possibile it converts value to type T.
 pure nothrow
 SafeValue!T as(T)(in JSONValue json, in string path = "", /* lazy */ in T defaultValue = T.init)
 {
@@ -52,7 +109,7 @@ SafeValue!T as(T)(in JSONValue json, in string path = "", /* lazy */ in T defaul
       {
          result.value = defaultValue;
          result._ok = false;
-         
+
       }
    }
 
@@ -74,7 +131,7 @@ SafeValue!T as(T)(in JSONValue json, in string path = "", /* lazy */ in T defaul
 	// The token is a leaf on json, but it's not a leaf on requested path
 	if (!isLast && type != JSONType.array && type != JSONType.object)
       return SafeValue!T(false, false, defaultValue);
-      
+
 	SafeValue!T result = SafeValue!T(true, true, defaultValue);
 
    try
@@ -118,7 +175,7 @@ SafeValue!T as(T)(in JSONValue json, in string path = "", /* lazy */ in T defaul
          case JSONType.object:
    			if (isLast)
    			{
-               // We are on the last token of path and we have a object. If user asks for a JSONValue it's ok. 
+               // We are on the last token of path and we have a object. If user asks for a JSONValue it's ok.
    				static if (is(T == JSONValue)) result.value = value.object();
    				else result._ok = false;
    			}
@@ -130,7 +187,7 @@ SafeValue!T as(T)(in JSONValue json, in string path = "", /* lazy */ in T defaul
          case JSONType.array:
    			if (isLast)
    			{
-   				// We are on the last token of path and we have an array. If user asks for a JSONValue it's ok. 
+   				// We are on the last token of path and we have an array. If user asks for a JSONValue it's ok.
    				static if  (is(T == JSONValue)) result.value = value.array();
    				else result._ok = false;
    			}
@@ -149,7 +206,7 @@ SafeValue!T as(T)(in JSONValue json, in string path = "", /* lazy */ in T defaul
 	return result;
 }
 
-// Shortcut. You can write as!null instead of as!(typeof(null))
+/// Shortcut. You can write as!null instead of as!(typeof(null))
 pure nothrow
 SafeValue!(typeof(null)) as(typeof(null) T)(in JSONValue json, in string path = "")
 {
@@ -173,9 +230,9 @@ unittest
 	assert(js.as!int("/string").ok == false);
 }
 
-// Works like as!T but it doesn't convert between types. 
+/// Works like as!T but it doesn't convert between types.
 pure nothrow
-SafeValue!T get(T)(in JSONValue json, in string path = "", in T defaultValue = T.init)
+SafeValue!T safe(T)(in JSONValue json, in string path = "", in T defaultValue = T.init)
 {
    alias Ret = SafeValue!T;
 
@@ -220,7 +277,7 @@ SafeValue!T get(T)(in JSONValue json, in string path = "", in T defaultValue = T
                   return Ret(true, true, JSONValue(value.object));
                else break;
             }
-            else return get!T(value, splitted.remainder, defaultValue);
+            else return safe!T(value, splitted.remainder, defaultValue);
 
          case JSONType.array:
             if (isLast) {
@@ -229,7 +286,7 @@ SafeValue!T get(T)(in JSONValue json, in string path = "", in T defaultValue = T
                   return Ret(true, true, JSONValue(value.array));
                else break;
             }
-            else return get!T(value, splitted.remainder, defaultValue);
+            else return safe!T(value, splitted.remainder, defaultValue);
       }
    }
    catch (Exception e)
@@ -241,33 +298,33 @@ SafeValue!T get(T)(in JSONValue json, in string path = "", in T defaultValue = T
    return Ret(true, false, defaultValue);
 }
 
-// Shortcut. You can write get!null instead of get!(typeof(null))
+/// Shortcut. You can write safe!null instead of safe!(typeof(null))
 pure nothrow
-SafeValue!(typeof(null)) get(typeof(null) T)(in JSONValue json, in string path = "")
+SafeValue!(typeof(null)) safe(typeof(null) T)(in JSONValue json, in string path = "")
 {
-   return get!(typeof(null))(json, path);
+   return safe!(typeof(null))(json, path);
 }
 
 unittest
 {
 	immutable js = JSOB("string", "str", "null", null, "obj", JSOB("int", 1, "float", 3.0f, "arr", JSAB("1", 2)));
 
-	assert(js.get!(typeof(null))("null").ok == true);
-	assert(js.get!(typeof(null))("string").ok == false);
-	assert(js.get!string("/string") == "str");
+	assert(js.safe!(typeof(null))("null").ok == true);
+	assert(js.safe!(typeof(null))("string").ok == false);
+	assert(js.safe!string("/string") == "str");
 
-	assert(js.get!string("/obj/int").ok == false);
-	assert(js.get!string("/obj/int") == string.init);
+	assert(js.safe!string("/obj/int").ok == false);
+	assert(js.safe!string("/obj/int") == string.init);
 
-	assert(js.get!int("/obj/arr/0").ok == false);
-	assert(js.get!int("/obj/arr/0") == int.init);
+	assert(js.safe!int("/obj/arr/0").ok == false);
+	assert(js.safe!int("/obj/arr/0") == int.init);
 
-	assert(js.get!int("/obj/arr/1") == 2);
-	assert(js.get!float("/obj/float") == 3.0f);
-	assert(js.get!int("/obj/int/blah").exists == false);
-	assert(js.get!string("bau").exists == false);
-	assert(js.get!int("/string").exists == true);
-	assert(js.get!int("/string").ok == false);
+	assert(js.safe!int("/obj/arr/1") == 2);
+	assert(js.safe!float("/obj/float") == 3.0f);
+	assert(js.safe!int("/obj/int/blah").exists == false);
+	assert(js.safe!string("bau").exists == false);
+	assert(js.safe!int("/string").exists == true);
+	assert(js.safe!int("/string").ok == false);
 }
 
 unittest
@@ -277,19 +334,19 @@ unittest
 	assert(js.as!null("/null").ok == true);
 	assert(js.as!null("/notnull").ok == false);
 
-	assert(js.get!null("/null").ok == true);
-	assert(js.get!null("/notnull").ok == false);
+	assert(js.safe!null("/null").ok == true);
+	assert(js.safe!null("/notnull").ok == false);
 }
 
-// Works like get but return T instead of SafeValue!T and throw an exception if something goes wrong (can't convert value or can't find key)
+/// Works like safe but return T instead of SafeValue!T and throw an exception if something goes wrong (can't convert value or can't find key)
 pure
 T read(T)(in JSONValue json, in string path = "")
 {
-	auto ret = get!T(json, path);
-   
+	auto ret = safe!T(json, path);
+
    if (!ret.ok || !ret.exists)
       throw new Exception("Can't read " ~ path ~ " from json");
-      
+
    return ret.value;
 }
 
@@ -297,7 +354,7 @@ unittest
 {
    import std.exception: assertThrown;
    immutable js = JSOB("string", "str", "null", null, "obj", JSOB("int", 1, "float", 3.0f, "arr", JSAB("1", 2)));
-   
+
    assert(js.read!string("string") == "str");
    assert(js.read!int("/obj/int") == 1);
    assertThrown(js.read!int("string"));
@@ -305,9 +362,9 @@ unittest
 }
 
 
-// Write a value. It creates missing objects and array (also missing elements)
+/// Write a value. It creates missing objects and array (also missing elements)
 pure
-ref JSONValue put(T)(ref JSONValue json, in string path, in T value)
+ref JSONValue put(T)(return ref JSONValue json, in string path, in T value)
 {
    // Take a token from path
    immutable splitted = split_json_path(path);
@@ -319,7 +376,7 @@ ref JSONValue put(T)(ref JSONValue json, in string path, in T value)
    if (isNumeric(splitted.token))
    {
       immutable idx = to!size_t(splitted.token);
-      
+
       // Are we reading an existing element from an existing array?
       if (json.type == JSONType.array && json.array.length > idx)
       {
@@ -379,17 +436,17 @@ unittest
 	js.put("/obj/arr/3", JSOB);
 	js.put("hello", "world");
 
-	assert(js.get!string("/string") == "hello");
-	assert(js.get!int("/null/not") == 10);
-	assert(js.get!null("/obj/arr/2").ok);
-	assert(js.get!JSONValue("/obj/arr/3") == JSOB);
-	assert(js.get!JSONValue("/obj/arr/3").ok == true);
-	assert(js.get!string("hello") == "world");
+	assert(js.safe!string("/string") == "hello");
+	assert(js.safe!int("/null/not") == 10);
+	assert(js.safe!null("/obj/arr/2").ok);
+	assert(js.safe!JSONValue("/obj/arr/3") == JSOB);
+	assert(js.safe!JSONValue("/obj/arr/3").ok == true);
+	assert(js.safe!string("hello") == "world");
 }
 
-// Remove a field (if it exists). It returns the object itself
+/// Remove a field (if it exists). It returns the object itself
 pure
-ref JSONValue remove(ref JSONValue json, in string path)
+ref JSONValue remove(return ref JSONValue json, in string path)
 {
    immutable splitted 	= split_json_path(path);
    immutable isLast  	= splitted.remainder.length == 0;
@@ -421,7 +478,7 @@ ref JSONValue remove(ref JSONValue json, in string path)
    return json;
 }
 
-// Check if a field exists or not
+/// Check if a field exists or not
 pure
 bool exists(in JSONValue json, in string path)
 {
@@ -469,13 +526,13 @@ unittest
 	assert(js.exists("/string") == false);
 	assert(js.exists("/obj/arr/3") == false);
 	assert(js.exists("/obj/arr/2") == true);
-	assert(js.get!JSONValue("/obj/arr/2") == JSOB);
+	assert(js.safe!JSONValue("/obj/arr/2") == JSOB);
 }
 
 
 private alias SplitterResult = Tuple!(string, "token", string, "remainder");
 
-// Used to split path like /hello/world in tokens
+/// Used to split path like /hello/world in tokens
 pure nothrow @safe @nogc
 private SplitterResult split_json_path(in string path)
 {
@@ -491,7 +548,7 @@ private SplitterResult split_json_path(in string path)
 	assert(0);
 }
 
-// You can build a json object with JsonObjectBuilder("key", 32, "another_key", "hello", "subobject", JsonObjectBuilder(...));
+/// You can build a json object with JsonObjectBuilder("key", 32, "another_key", "hello", "subobject", JsonObjectBuilder(...));
 pure
 JSONValue JsonObjectBuilder(T...)(T vals)
 {
@@ -524,7 +581,7 @@ JSONValue JsonObjectBuilder(T...)(T vals)
    return value;
 }
 
-// You can build a json array with JsonArrayBuilder("first", 32, "another_element", 2, 23.4, JsonObjectBuilder(...));
+/// You can build a json array with JsonArrayBuilder("first", 32, "another_element", 2, 23.4, JsonObjectBuilder(...));
 pure
 JSONValue JsonArrayBuilder(T...)(T vals)
 {
@@ -541,23 +598,23 @@ unittest
 {
    {
       enum js = JSOB("array", JSAB(1,2,"blah"), "subobj", JSOB("int", 1, "string", "str", "array", [1,2,3]));
-      assert(js.get!int("/array/1") == 2);
-      assert(js.get!int("/subobj/int") == 1);
-      assert(js.get!string("/subobj/string") == "str");
+      assert(js.safe!int("/array/1") == 2);
+      assert(js.safe!int("/subobj/int") == 1);
+      assert(js.safe!string("/subobj/string") == "str");
       assert(js.as!string("/subobj/array/2") == "3");
       assert(js.exists("/subobj/string") == true);
       assert(js.exists("/subobj/other") == false);
-      
+
       // /array/1 it's an integer
       {
          // Can't get a string
          {
-            immutable val = js.get!string("/array/1", "default");
+            immutable val = js.safe!string("/array/1", "default");
             assert(val.exists == true);
             assert(val.ok == false);
             assert(val == "default");
          }
-         
+
          // Can read as string
          {
             immutable val = js.as!string("/array/1", "default");
@@ -566,8 +623,8 @@ unittest
             assert(val == "2");
          }
       }
-      
-      
+
+
       // This value doesn't exist
       {
          immutable val = js.as!string("/subobj/other", "default");
@@ -576,7 +633,7 @@ unittest
          assert(val == "default");
       }
 
-      
+
       // Value exists but can't convert to int
       {
          immutable val = js.as!int("/array/2", 15);
@@ -584,10 +641,10 @@ unittest
          assert(val.ok == false);
          assert(val == 15);
       }
-      
+
       // Can't edit an enum, of course
       assert(__traits(compiles, js.remove("/subobj/string")) == false);
-      
+
       // But I can edit a copy
       JSONValue cp = js;
       assert(cp == js);
@@ -604,98 +661,98 @@ unittest
 unittest
 {
    import std.json : parseJSON;
-   
+
    // Standard way
    JSONValue json = parseJSON(`{"user" : "foo", "address" : {"city" : "venice", "country" : "italy"}, "tags" : ["hello" , 3 , {"key" : "value"}]}`);
-  
+
    {
-      string user = json.get!string("user"); // Read a string from json
+      string user = json.safe!string("user"); // Read a string from json
       assert(user == "foo");
    }
-   
+
    {
       // Read a string, user is a SafeValue!string
-      auto user = json.get!string("user");
+      auto user = json.safe!string("user");
       assert(user.ok == true);
       assert(user.exists == true);
-      
-      // This field doesn't exists on json 
+
+      // This field doesn't exists on json
       // I can set a default value
-      auto notfound = json.get!string("blah", "my default value");
+      auto notfound = json.safe!string("blah", "my default value");
       assert(notfound.ok == false);
       assert(notfound.exists == false);
       assert(notfound == "my default value");
-      
-      // This field exists but it's not an int, it's a string 
-      auto wrong = json.get!int("user");
+
+      // This field exists but it's not an int, it's a string
+      auto wrong = json.safe!int("user");
       assert(wrong.ok == false);
-      assert(wrong.exists == true); 
+      assert(wrong.exists == true);
       assert(wrong == int.init);
    }
-   
+
    {
       // I can read deep fields
-      assert(json.get!string("/address/city") == "venice");
-      
+      assert(json.safe!string("/address/city") == "venice");
+
       // also inside an array
-      assert(json.get!string("/tags/2/key") == "value");
+      assert(json.safe!string("/tags/2/key") == "value");
    }
-   
+
    {
-      // Using as!T you can convert field 
+      // Using as!T you can convert field
       assert(json.as!string("/tags/1") == "3"); // On json "/tags/1" is an int.
    }
-   
+
    {
       // You can check if a field exists or not
       assert(json.exists("/address/country") == true);
-      
+
       // You can remove it
       json.remove("/address/country");
-      
+
       // It doesn't exists anymore
       assert(json.exists("/address/country") == false);
    }
-   
+
    {
       // You can write using put.
-      json.put("/address/country", "italy"); // Restore deleted field 
+      json.put("/address/country", "italy"); // Restore deleted field
       json.put("/this/is/a/deep/value", 100); // It create the whole tree
       json.put("/this/is/an/array/5", "hello"); // Ditto
-      
-      assert(json.get!int("/this/is/a/deep/value") == 100);
-      assert(json.get!string("/this/is/an/array/5") == "hello"); // elements 0,1,2,3,4 are nulled
+
+      assert(json.safe!int("/this/is/a/deep/value") == 100);
+      assert(json.safe!string("/this/is/an/array/5") == "hello"); // elements 0,1,2,3,4 are nulled
    }
-   
+
    {
-      // A fast way to build object CTFE compatible. 
+      // A fast way to build object CTFE compatible.
       // JSOB is an alias for JsonObjectBuilder and JSAB for JsonArrayBuilder
       JSONValue jv = JSOB
       (
-         "key", "value", 
-         "obj", JSOB("subkey", 3), 
-         "array", [1,2,3], 
+         "key", "value",
+         "obj", JSOB("subkey", 3),
+         "array", [1,2,3],
          "mixed_array", JSAB(1, "hello", 3.0f)
       );
-      
-      assert(jv.toString == `{"array":[1,2,3],"key":"value","mixed_array":[1,"hello",3],"obj":{"subkey":3}}`);
+
+      assert(jv.toString == `{"array":[1,2,3],"key":"value","mixed_array":[1,"hello",3.0],"obj":{"subkey":3}}`);
    }
 
    {
       JSONValue jv = JSOB
       (
-         "key", "value", 
-         "obj", JSOB("subkey", 3), 
-         "array", [1,2,3], 
+         "key", "value",
+         "obj", JSOB("subkey", 3),
+         "array", [1,2,3],
          "mixed_array", JSAB(1, "hello", 3.0f)
       );
 
-      foreach(size_t idx, o; jv.get!JSONValue("/array"))
+      foreach(size_t idx, o; jv.safe!JSONValue("/array"))
       {
-         assert(o.get!int("/") == idx+1);
+         assert(o.safe!int("/") == idx+1);
          assert(o.as!float("") == idx+1);
          assert(o.read!int("/")== idx+1);
-         assert(o.get!int == idx+1);
+         assert(o.safe!int == idx+1);
          assert(o.as!float == idx+1);
          assert(o.read!int == idx+1);
       }
