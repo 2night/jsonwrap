@@ -9,7 +9,7 @@ Add jsonwrap to your dub project:
 
 ## Quickstart
 
-jsonwrap just adds some useful methods to ```JSONObject``` from ```std.json```
+jsonwrap just adds some useful methods to ```JSONValue``` from ```std.json```
 
 ```d
 import jsonwrap;
