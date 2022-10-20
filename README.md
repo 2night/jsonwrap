@@ -9,7 +9,7 @@ Add jsonwrap to your dub project:
 
 ## Quickstart
 
-jsonwrap just adds some useful methods to ```JSONValue``` from ```std.json```
+jsonwrap just adds some useful methods to ```JSONValue``` from ```std.json```.
 
 ```d
 import jsonwrap;
@@ -103,3 +103,6 @@ JSONValue json = parseJSON(`
 }
 
 ```
+
+Documentation available [here](https://jsonwrap.dpldocs.info/jsonwrap.html)
+
