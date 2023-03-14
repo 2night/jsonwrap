@@ -1,69 +1,78 @@
 # jsonwrap
-Just a wrap over dlang std.json.
+Just a wrap over dlang std.json. Documentation available [here](https://jsonwrap.dpldocs.info/jsonwrap.html)
 
-## Setup
+## Create a json
+```d
+  // Standard D way
+  JSONValue json = parseJSON(`{"name":"John Doe", "age":31, "tags":["user", "admin"]}`);
+  
+  // jsonwrap helper
+  json.parse(`{"name":"John Doe", "age":31, "tags":["user", "admin"]}`);
+  
+  // JSOB/JSAB builders
+  json = JSOB("name", "John Doe", "age", 31, "tags", JSAB("user", "admin"));
+```
+## Read a value
+```d
+    JSONValue json = parseJSON(`
+        {
+        "user" : { "name" : "John Doe", "age" : 31, "tags" : ["user", "admin"]},
+        "city" : "London"
+        }
+    `);
 
-Add jsonwrap to your dub project:
+    // Plain read
+    assert(json.read!string("user/name") == "John Doe");
+    assert(json.read!string("/user/tags/1") == "admin");
 
-```dub add jsonwrap```
+    // safe() and as()
+    assertThrown(json.read!string("user/age")); // Exception: user/age is an int, not string.
+    assert(json.safe!string("user/age", "N/D") == "N/D"); // safe method returns a default value on error
+    assert(json.as!string("user/age") == "31"); // as method convert value to requested type
+```
 
-## Quickstart
+## Put a value
+```d
+    JSONValue json;
 
-jsonwrap just adds some useful methods to ```JSONValue``` from ```std.json```.
+    json.put("name", "John");
+    json.put("tags", ["1", "2", "3"]);
+    json.put("arr", JSAB("mixed", 10, "array"));
+
+    // Append to an existing array
+    json.append("tags", 4);
+
+    // Create a new array and append an element
+    json.append("new_array", 1);
+
+    // Convert existing element to array and append
+    json.append("name", "Doe");
+
+    /+ Result:
+    {
+        "name" : ["John","Doe"],
+        "arr" : ["mixed",10,"array"],
+        "tags" : ["1","2","3",4],
+        "new_array" : [1]
+    }
+    +/
+    
+    // Add a new value, recreating the whole json tree
+    j.put("hello/world/so/deep", "yay!");
+```
+## Other methods
 
 ```d
-import jsonwrap;
-
-void main()
-{
-  import std.exception :assertThrown;
-
-  // This works with CTFE, too.
-  auto j = JSOB(
-    "field1", "value1",
-    "field2", JSOB(
-      "subfield1", "value2",
-      "subfield2", 3,
-      "subfield3", [1,2,3],
-    ),
-    "field3", JSAB("mixed", 10, "array", JSOB("obj", 15))
-  );
-
-  // Or
-  // auto j = parseJSON(`{"field" : "value1"}`);
-
-  // Read will throw on error
-  assert(j.read!string("/field2/subfield1") == "value2");
-  assert(j.read!int("/field3/1") == 10);
-  assert(j.read!int("/field3/3/obj") == 15);
-  assertThrown(j.read!string("/field2/subfield2")); // Wrong type
-
-  // Safe return default value on error
-  assert(j.safe!string("/field2/subfield2") == string.init);  // subfield2 is a int, wrong type.
-  assert(j.safe!string("/field2/wrong/path") == string.init);
-  assert(j.safe!string("/field2/wrong/path", "default") == "default");
-
-  // Like safe, but it tries to convert
-  assert(j.as!string("/field2/subfield1"), "value2");
-  assert(j.as!string("/field2/subfield2"), "3");
-
   // Check if a key exists
-  assert(j.exists("/field2/subfield1") == true);
-  assert(j.exists("/field3/test") == false);
-
+  assert(j.exists("/user/name") == true);
+  
   // Remove a key
-  assert(j.exists("/field2/subfield2") == true);
   j.remove("/field2/subfield2");
-  assert(j.exists("/field2/subfield2") == false);
-
-  // Add a new value, recreating the whole tree
-  j.put("hello/world/so/deep", "yay!");
-  assert(j.exists("hello/world/so/deep") == true);
-
+  
 }
 ```
 
-## One more thing
+## Working with safe()
 
 ```d
 import std.json;
@@ -103,6 +112,4 @@ JSONValue json = parseJSON(`
 }
 
 ```
-
-Documentation available [here](https://jsonwrap.dpldocs.info/jsonwrap.html)
 
