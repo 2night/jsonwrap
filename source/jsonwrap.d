@@ -791,6 +791,7 @@ unittest
 pure
 ref JSONValue parse(return ref JSONValue json, in string data)
 {
+    import std.json : parseJSON;
     json = parseJSON(data);
     return json;
 }
