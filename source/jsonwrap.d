@@ -758,3 +758,39 @@ unittest
       }
    }
 }
+
+/// Append value to array. Array is created if not exists.
+pure
+ref JSONValue append(T)(return ref JSONValue json, in string path, in T value)
+{
+    auto r = json.as!JSONValue(path);
+
+    if (!r.exists) json.put(path ~ "/0", value);
+    else if (r.value.type != JSONType.array) json.put(path, JSAB(r.value, value));
+    else json.put(path ~ "/" ~ r.array.length.to!string, value);
+
+    return json;
+}
+
+unittest 
+{
+    auto j = JSOB("k-1", "v-1", "k-2", 1);
+
+    j.put("/k-3/0", "v-3-1");
+    j.put("/k-3/1", "v-3-2");
+
+    j.append("/k-3", "v-3-3");
+    j.append("k-4", "v-4-1");
+    j.append("k-4", "v-4-2");
+    j.append("k-2", "v-2-2");
+
+    assert(j.toString == `{"k-1":"v-1","k-2":[1,"v-2-2"],"k-3":["v-3-1","v-3-2","v-3-3"],"k-4":["v-4-1","v-4-2"]}`);
+}
+
+/// Parse a string
+pure
+ref JSONValue parse(return ref JSONValue json, in string data)
+{
+    json = parseJSON(data);
+    return json;
+}
